@@ -49,8 +49,8 @@ async function fetchContacts(companyId?: number) {
 
       const url = companyId
 
-        ? `http://localhost:3000/crm/contact?companyId=${companyId}`
-        : 'http://localhost:3000/crm/contact';
+        ? `/crm/contact?companyId=${companyId}`
+        : '/crm/contact';
       
       const response = await fetch(url);
 
@@ -73,7 +73,7 @@ async function fetchCompanies() {
       // Simulate network delay for testing loading state
       // await sleep(1000);
 
-      const response = await fetch('http://localhost:3000/crm/companies');
+      const response = await fetch('/crm/companies');
 
       if (!response.ok) {
         throw new Error('Failed to load companies');
@@ -95,8 +95,8 @@ async function fetchCompanies() {
       const method = editingCompanyID ? 'PATCH' : 'POST';
 
       const url = editingCompanyID 
-        ? `http://localhost:3000/crm/companies/${editingCompanyID}` 
-        : 'http://localhost:3000/crm/companies';
+        ? `/crm/companies/${editingCompanyID}` 
+        : '/crm/companies';
 
   const response = await fetch(url, {
     method,
@@ -138,7 +138,7 @@ async function fetchCompanies() {
       setError('');
       
       const response = await fetch(
-        `http://localhost:3000/crm/companies/${companyId}`, 
+        `/crm/companies/${companyId}`, 
         {
           method: 'DELETE',
         }
@@ -159,7 +159,7 @@ async function fetchCompanies() {
       setError('');
       
       const response = await fetch(
-        `http://localhost:3000/crm/contact/${contactId}`, 
+        `/crm/contact/${contactId}`, 
         {
           method: 'DELETE',
         }
@@ -191,8 +191,8 @@ async function fetchCompanies() {
 
       // Determine the URL based on whether we're editing an existing contact or creating a new one
       const url = editingContactID !== null
-        ? `http://localhost:3000/crm/contact/${editingContactID}`
-        : 'http://localhost:3000/crm/contact';
+        ? `/crm/contact/${editingContactID}`
+        : '/crm/contact';
 
       // Send the request to the backend API  
       const response = await fetch(url, {
