@@ -4,6 +4,8 @@ Tobler Modernization Lab (TML) is a full-stack application and cloud deployment 
 
 The project combines a React frontend, NestJS REST API, PostgreSQL relational database, and AWS infrastructure. It serves as a hands-on environment for developing and demonstrating skills in backend modernization, cloud deployment, database design, API development, security, automation, and operational reliability.
 
+THe project was originally designed as an aid to identify potential corporate clients for marketing of Technical and Professional English Language Prep courses in Taichung City, Taiwan. Not only does the project serve a real-world business need but also, it is used as a practical learning objective to bridge the knowledge gap between legacy AS400 databases and modern approaches. This project remains a growing project to provide a space to explore real-world application of emerging technologies and to serve as a continous learning tool.  
+
 ## Architecture
 
 ```text
@@ -283,6 +285,7 @@ Planned work includes:
 - AI-assisted CRM capabilities
 - AI-generated personalized outreach
 - Additional monitoring and operational improvements
+- Campaign/Outreach Recommendation Tool using Java + Spring Boot
 
 ## Project Status
 
