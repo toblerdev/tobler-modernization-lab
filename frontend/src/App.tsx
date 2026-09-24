@@ -49,8 +49,8 @@ async function fetchContacts(companyId?: number) {
 
       const url = companyId
 
-        ? `/crm/contact?companyId=${companyId}`
-        : '/crm/contact';
+        ? `/crm/contacts?companyId=${companyId}`
+        : '/crm/contacts';
       
       const response = await fetch(url);
 
@@ -159,7 +159,7 @@ async function fetchCompanies() {
       setError('');
       
       const response = await fetch(
-        `/crm/contact/${contactId}`, 
+        `/crm/contacts/${contactId}`, 
         {
           method: 'DELETE',
         }
@@ -191,8 +191,8 @@ async function fetchCompanies() {
 
       // Determine the URL based on whether we're editing an existing contact or creating a new one
       const url = editingContactID !== null
-        ? `/crm/contact/${editingContactID}`
-        : '/crm/contact';
+        ? `/crm/contacts/${editingContactID}`
+        : '/crm/contacts';
 
       // Send the request to the backend API  
       const response = await fetch(url, {
