@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './App.css';
 
 type Company = {
   companyId: number;
@@ -273,9 +274,12 @@ async function fetchCompanies() {
           Back to Companies
         </button>
 
-        <h1>Contacts for {company.companyName}</h1>
+        {/*Jira: TML 34 - Name overlap. Define header with a class*/}
+        {/* <h1>Contacts for {company.companyName}</h1> */}
+        <h1 className="company-title">
+          Contacts for {company.companyName}
+        </h1>
 
-        {/* Contact form goes here */}
       <h2>Add Contact</h2>
 
       <input

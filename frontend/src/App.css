@@ -182,3 +182,8 @@
     border-right-color: var(--border);
   }
 }
+
+/* Jira: TML 34 - Name overlap. Define header with a class */
+.company-title {
+  line-height: 1.15;
+}
