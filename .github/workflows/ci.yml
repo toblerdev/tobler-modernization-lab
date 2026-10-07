@@ -60,4 +60,4 @@ jobs:
         run: npm ci
 
       - name: Build frontend
-        run: npm run buildx
+        run: npm run build
