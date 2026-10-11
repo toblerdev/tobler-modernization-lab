@@ -28,6 +28,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # ==========================================
+      # Build and test NestJS backend
+      # ==========================================
+
       - name: Set up backend Node.js
         uses: actions/setup-node@v4
         with:
@@ -46,6 +50,10 @@ jobs:
         working-directory: backend
         run: npm prune --omit=dev
 
+      # ==========================================
+      # Build React frontend
+      # ==========================================
+
       - name: Set up frontend Node.js
         uses: actions/setup-node@v4
         with:
@@ -59,6 +67,10 @@ jobs:
           npm ci
           npm run build
 
+      # ==========================================
+      # Package and validate release artifacts
+      # ==========================================
+
       - name: Package release
         shell: bash
         run: |
@@ -70,19 +82,45 @@ jobs:
           cp -a backend/node_modules release/backend/
           cp -a frontend/dist release/frontend/
 
+          # Remove npm executable links from the copied
+          # release package, not the original dependencies.
+          find release/backend/node_modules \
+            -type d -name .bin -prune -exec rm -rf -- {} +
+
+          # Reject any remaining symbolic links.
+          if find release -type l -print -quit | grep -q .; then
+            echo "ERROR: Release contains unexpected symlinks." >&2
+            exit 1
+          fi
+
+          # Verify required application files.
+          test -f release/backend/dist/main.js
+          test -f release/frontend/dist/index.html
+          test -d release/backend/node_modules
+
+          # Create release archive.
           tar -czf release.tar.gz -C release .
 
+          # Generate SHA-256 checksum.
           sha256sum release.tar.gz > release.tar.gz.sha256
 
           echo "Release commit: $GITHUB_SHA"
           echo "Release size:"
           du -h release.tar.gz
 
+      # ==========================================
+      # Authenticate with AWS using OIDC
+      # ==========================================
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-2
+
+      # ==========================================
+      # Upload immutable artifacts to private S3
+      # ==========================================
 
       - name: Upload release artifacts to S3
         shell: bash
@@ -107,6 +145,10 @@ jobs:
 
           echo "Release uploaded to:"
           echo "s3://$BUCKET/$PREFIX/"
+
+      # ==========================================
+      # Production deployment safety gate
+      # ==========================================
 
       - name: Deployment execution disabled
         run: |
