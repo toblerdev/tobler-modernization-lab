@@ -2,6 +2,9 @@
 name: TML Publish Test Artifact
 
 on:
+  push:
+    branches:
+      - feature/TML-1-automated-deployment
   workflow_dispatch:
 
 permissions:
