@@ -3,6 +3,9 @@ name: TML Test Deployment
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/TML-1-automated-deployment
 
 permissions:
   contents: read
