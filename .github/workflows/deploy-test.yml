@@ -1,0 +1,22 @@
+name: TML Test Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: '40-character Git commit SHA of the published test artifact'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-entry:
+    name: Manual Workflow Entry Point
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm workflow entry point
+        run: |
+          echo "Manual workflow entry point is available."
+          echo "Select the deployment feature branch to run its workflow."
