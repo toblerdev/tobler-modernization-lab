@@ -43,6 +43,9 @@ jobs:
             exit 1
           fi
 
+          echo "Release SHA length: ${#RELEASE_SHA}"
+          printf 'Release SHA shell representation: %q\n' "$RELEASE_SHA"
+
           if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "ERROR: Invalid release SHA."
             exit 1
