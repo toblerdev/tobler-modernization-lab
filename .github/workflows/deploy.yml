@@ -16,7 +16,6 @@ jobs:
     name: Build and Upload Release
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
 
     permissions:
       id-token: write
@@ -155,3 +154,18 @@ jobs:
           echo "Release artifact uploaded successfully."
           echo "No EC2 deployment will be performed."
           echo "SSM deployment remains disabled pending integration testing."
+
+  activate-production:
+    name: Activate Production Release
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Activation disabled pending validation
+        run: |
+          echo "Production approval granted."
+          echo "EC2 activation is not yet enabled."
