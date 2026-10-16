@@ -224,6 +224,8 @@ jobs:
           cat > remote-activate.sh <<'REMOTE'
           set -euo pipefail
 
+          export PATH="/home/ec2-user/.nvm/versions/node/v22.23.3/bin:$PATH"
+
           SHA="__RELEASE_SHA__"
 
           TML_APPROVED_DEPLOYMENT=YES \
