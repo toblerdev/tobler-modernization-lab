@@ -121,7 +121,11 @@ import sys
 import tarfile
 
 archive = sys.argv[1]
-allowed = ("backend/dist/", "backend/node_modules/", "frontend/dist/")
+allowed = (
+    "backend/dist/",
+    "backend/node_modules/",
+    "frontend/dist/",
+)
 
 MAX_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ENTRIES = 100_000
@@ -146,6 +150,7 @@ with tarfile.open(archive, "r:gz") as tar:
                 raise SystemExit(
                     "ERROR: Archive exceeds 2 GiB uncompressed"
                 )
+
         if member.name in (".", "./"):
             if not member.isdir():
                 raise SystemExit("Invalid archive root entry")
@@ -163,18 +168,26 @@ with tarfile.open(archive, "r:gz") as tar:
 
         # Reject unsafe paths before normalization.
         if path.startswith("/") or "\\" in path:
-            raise SystemExit(f"Unsafe archive path: {member.name}")
+            raise SystemExit(
+                f"Unsafe archive path: {member.name}"
+            )
 
         parts = path.rstrip("/").split("/")
 
         if not parts or any(p in ("", ".", "..") for p in parts):
-            raise SystemExit(f"Unsafe archive path: {member.name}")
+            raise SystemExit(
+                f"Unsafe archive path: {member.name}"
+            )
 
         if member.issym() or member.islnk():
-            raise SystemExit(f"Archive link not allowed: {member.name}")
+            raise SystemExit(
+                f"Archive link not allowed: {member.name}"
+            )
 
         if not (member.isfile() or member.isdir()):
-            raise SystemExit(f"Unsupported archive entry: {member.name}")
+            raise SystemExit(
+                f"Unsupported archive entry: {member.name}"
+            )
 
         # Reject setuid, setgid, and sticky permission bits.
         if member.mode & 0o7000:
@@ -183,11 +196,20 @@ with tarfile.open(archive, "r:gz") as tar:
             )
 
         if not (
-            path in ("backend", "frontend", "backend/dist",
-                     "backend/node_modules", "frontend/dist")
+            path in (
+                "backend",
+                "frontend",
+                "backend/dist",
+                "backend/node_modules",
+                "frontend/dist",
+                "backend/package.json",
+                "backend/package-lock.json",
+            )
             or any(path.startswith(prefix) for prefix in allowed)
         ):
-            raise SystemExit(f"Unexpected archive entry: {member.name}")
+            raise SystemExit(
+                f"Unexpected archive entry: {member.name}"
+            )
 
 print("Archive entry validation passed.")
 PY
@@ -231,6 +253,7 @@ destination = os.fsencode(sys.argv[2])
 
 libc = ctypes.CDLL(None, use_errno=True)
 renameat2 = libc.renameat2
+
 renameat2.argtypes = [
     ctypes.c_int,
     ctypes.c_char_p,
@@ -238,6 +261,7 @@ renameat2.argtypes = [
     ctypes.c_char_p,
     ctypes.c_uint,
 ]
+
 renameat2.restype = ctypes.c_int
 
 AT_FDCWD = -100
@@ -251,7 +275,11 @@ result = renameat2(
 
 if result != 0:
     error = ctypes.get_errno()
-    raise OSError(error, os.strerror(error), os.fsdecode(destination))
+    raise OSError(
+        error,
+        os.strerror(error),
+        os.fsdecode(destination),
+    )
 
 print("Release directory published atomically.")
 PY

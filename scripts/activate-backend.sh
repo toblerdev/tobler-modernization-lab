@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
@@ -14,8 +14,8 @@ if ! flock -n 9; then
 fi
 
 # TML-1 backend activation.
-# Do not execute independently in production until deployment
-# orchestration, rollback and change-control review are complete.
+# Production activation requires explicit authorization,
+# an approved change-control window, and deployment orchestration.
 
 [[ "$(id -un)" == "ec2-user" ]] || {
     echo "ERROR: Must run as ec2-user." >&2
@@ -24,6 +24,25 @@ fi
 
 SHA="${1:-}"
 MODE="${2:-}"
+
+if [[ -n "$MODE" && "$MODE" != "--dry-run" ]]; then
+    echo "ERROR: Unknown option: $MODE" >&2
+    exit 1
+fi
+
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "ERROR: Full 40-character commit SHA required." >&2
+    exit 1
+}
+
+# Explicit authorization is required for actual activation.
+# Dry-run is exempt because it does not change the active release.
+if [[ "$MODE" != "--dry-run" ]]; then
+    if [[ "${TML_APPROVED_DEPLOYMENT:-}" != "YES" ]]; then
+        echo "ERROR: Production activation requires TML_APPROVED_DEPLOYMENT=YES." >&2
+        exit 1
+    fi
+fi
 
 # Production change-control window: Friday in Taiwan.
 # Dry-run is allowed on other days because it changes nothing.
@@ -35,15 +54,6 @@ if [[ "$MODE" != "--dry-run" ]]; then
         exit 1
     fi
 fi
-
-if [[ -n "$MODE" && "$MODE" != "--dry-run" ]]; then
-    echo "ERROR: Unknown option: $MODE" >&2
-    exit 1
-fi
-[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || {
-    echo "ERROR: Full 40-character commit SHA required." >&2
-    exit 1
-}
 
 BASE="/home/ec2-user/tml-releases"
 RELEASE="$BASE/releases/$SHA"
@@ -221,7 +231,7 @@ handle_exit() {
     set +e
 
     if [[ "$ACTIVATION_STARTED" == true &&
-      "$ROLLBACK_RUNNING" == false ]]; then
+          "$ROLLBACK_RUNNING" == false ]]; then
         if ! rollback; then
             echo "CRITICAL: Rollback failed; manual recovery required." >&2
             status=1
