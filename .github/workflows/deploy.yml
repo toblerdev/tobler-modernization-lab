@@ -1,7 +1,13 @@
+
 name: TML Production Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: "Full 40-character commit SHA approved for release"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,13 +18,35 @@ concurrency:
 
 jobs:
   build-and-upload:
-    name: Build and Package Release
-    if: github.ref == 'refs/heads/main'
+    name: Build and package release
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+
+    outputs:
+      release_sha: ${{ steps.validate.outputs.release_sha }}
+
     steps:
-      - name: Checkout approved commit
+      - name: Validate approved commit SHA
+        id: validate
+        env:
+          APPROVED_SHA: ${{ inputs.approved_sha }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: approved_sha must be a lowercase 40-character SHA."
+            exit 1
+          fi
+
+          if [[ "$APPROVED_SHA" != "$RELEASE_SHA" ]]; then
+            echo "ERROR: Approved SHA does not match the workflow commit."
+            exit 1
+          fi
+
+          echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Check out approved source
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -26,89 +54,170 @@ jobs:
       - name: Set up backend Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      - name: Build and test backend
+      - name: Install backend dependencies
         working-directory: backend
-        run: |
-          npm ci
-          npm test -- --runInBand
-          npm run build
+        run: npm ci
 
-      - name: Prepare backend runtime dependencies
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test -- --runInBand
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Remove backend development dependencies
         working-directory: backend
         run: npm prune --omit=dev
 
       - name: Set up frontend Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
       - name: Build frontend
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm run build
 
-      - name: Package release
-        shell: bash
+      - name: Package release and generate checksum
+        env:
+          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          mkdir -p release/backend release/frontend
-          cp -a backend/dist release/backend/
-          cp -a backend/node_modules release/backend/
-          cp -a frontend/dist release/frontend/
 
-          find release/backend/node_modules \
-            -type d -name .bin -prune -exec rm -rf -- {} +
+          mkdir -p release-package/backend
+          mkdir -p release-package/frontend
 
-          if find release -type l -print -quit | grep -q .; then
-            echo "ERROR: Release contains unexpected symlinks." >&2
-            exit 1
-          fi
+          cp -a backend/dist release-package/backend/
+          cp -a backend/node_modules release-package/backend/
+          cp backend/package.json release-package/backend/
+          cp backend/package-lock.json release-package/backend/
 
-          test -f release/backend/dist/main.js
-          test -f release/frontend/dist/index.html
-          test -d release/backend/node_modules
+          cp -a frontend/dist release-package/frontend/
 
-          tar -czf release.tar.gz -C release .
-          sha256sum release.tar.gz > release.tar.gz.sha256
-          echo "Release commit: $GITHUB_SHA"
-          du -h release.tar.gz
+          tar -czf "${RELEASE_SHA}.tar.gz" \
+            --exclude='*/node_modules/.bin' \
+            --exclude='*/node_modules/.bin/*' \
+            -C release-package .
 
-      - name: Save release artifact
+          # EC2 expects the checksum filename to be release.tar.gz.
+          cp "${RELEASE_SHA}.tar.gz" release.tar.gz
+
+          sha256sum release.tar.gz \
+            > "${RELEASE_SHA}.tar.gz.sha256"
+
+          sha256sum -c "${RELEASE_SHA}.tar.gz.sha256"
+
+          rm release.tar.gz
+
+      - name: Validate release archive entries
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          python3 - "$RELEASE_SHA.tar.gz" <<'PY'
+          import sys
+          import tarfile
+
+          archive = sys.argv[1]
+
+          allowed_prefixes = (
+              "backend/dist/",
+              "backend/node_modules/",
+              "frontend/dist/",
+          )
+
+          allowed_paths = {
+              "backend",
+              "frontend",
+              "backend/dist",
+              "backend/node_modules",
+              "frontend/dist",
+              "backend/package.json",
+              "backend/package-lock.json",
+          }
+
+          with tarfile.open(archive, "r:gz") as tar:
+              for member in tar:
+                  if member.name in (".", "./"):
+                      continue
+
+                  path = member.name.removeprefix("./").rstrip("/")
+
+                  if member.issym() or member.islnk():
+                      raise SystemExit(
+                          f"ERROR: Archive contains link: {member.name}"
+                      )
+
+                  if not (member.isfile() or member.isdir()):
+                      raise SystemExit(
+                          f"ERROR: Unsupported entry: {member.name}"
+                      )
+
+                  if not (
+                      path in allowed_paths
+                      or any(
+                          path.startswith(prefix)
+                          for prefix in allowed_prefixes
+                      )
+                  ):
+                      raise SystemExit(
+                          f"ERROR: Unexpected entry: {member.name}"
+                      )
+
+          print("Release archive entries validated.")
+          PY
+
+      - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: production-release
+          name: tml-release
           path: |
-            release.tar.gz
-            release.tar.gz.sha256
+            ${{ github.sha }}.tar.gz
+            ${{ github.sha }}.tar.gz.sha256
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
 
   stage-production:
-    name: Stage Production Release
+    name: Stage release on EC2
     needs: build-and-upload
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+
     environment: production
+
     permissions:
-      id-token: write
       contents: read
+      id-token: write
+
     steps:
       - name: Download release artifact
         uses: actions/download-artifact@v4
         with:
-          name: production-release
+          name: tml-release
 
       - name: Verify release checksum
-        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          sha256sum --check release.tar.gz.sha256
+
+          cp "${RELEASE_SHA}.tar.gz" release.tar.gz
+
+          sha256sum -c "${RELEASE_SHA}.tar.gz.sha256"
+
+          rm release.tar.gz
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -117,135 +226,273 @@ jobs:
           aws-region: us-east-2
 
       - name: Verify AWS identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          aws sts get-caller-identity
+        run: aws sts get-caller-identity
 
-      - name: Upload or verify immutable release artifacts
-        shell: bash
+      - name: Upload or verify immutable release in S3
         env:
-          BUCKET: tml-deployment-artifacts-779400169960-us-east-2-an
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_BUCKET: ${{ vars.TML_RELEASE_BUCKET }}
         run: |
           set -euo pipefail
-          PREFIX="releases/$GITHUB_SHA"
 
-          # First inspect both objects. A missing object returns 404;
-          # permission errors and other failures must stop the job.
+          test -n "$RELEASE_BUCKET"
+          PREFIX="releases/${RELEASE_SHA}"
+
           declare -A EXISTS
+
           for FILE in release.tar.gz release.tar.gz.sha256; do
-            KEY="$PREFIX/$FILE"
-            ERR_FILE=$(mktemp)
-            if aws s3api head-object --bucket "$BUCKET" --key "$KEY" \
+            KEY="${PREFIX}/${FILE}"
+            ERR_FILE="$(mktemp)"
+
+            if aws s3api head-object \
+              --bucket "$RELEASE_BUCKET" \
+              --key "$KEY" \
               >/dev/null 2>"$ERR_FILE"; then
               EXISTS["$FILE"]=yes
-            elif grep -Eq '\(404\)|Not Found' "$ERR_FILE"; then
+            elif grep -Eq '\(404\)|Not Found|HeadObject.*404' "$ERR_FILE"; then
               EXISTS["$FILE"]=no
             else
-              echo "ERROR: Unable to inspect S3 object $KEY" >&2
+              echo "ERROR: Unable to inspect S3 object: $KEY" >&2
               cat "$ERR_FILE" >&2
               rm -f "$ERR_FILE"
               exit 1
             fi
+
             rm -f "$ERR_FILE"
           done
 
-          # Never repair a partially populated immutable release prefix.
-          if [[ "${EXISTS[release.tar.gz]}" != "${EXISTS[release.tar.gz.sha256]}" ]]; then
-            echo "ERROR: Incomplete release prefix; manual review required." >&2
+          if [[ "${EXISTS[release.tar.gz]}" != \
+                "${EXISTS[release.tar.gz.sha256]}" ]]; then
+            echo "ERROR: Incomplete release in S3. Manual review required." >&2
             exit 1
           fi
 
           if [[ "${EXISTS[release.tar.gz]}" == yes ]]; then
             for FILE in release.tar.gz release.tar.gz.sha256; do
-              KEY="$PREFIX/$FILE"
-              TEMP_FILE=$(mktemp)
-              aws s3api get-object --bucket "$BUCKET" --key "$KEY" \
+              KEY="${PREFIX}/${FILE}"
+              LOCAL_FILE="$FILE"
+
+              if [[ "$FILE" == "release.tar.gz" ]]; then
+                LOCAL_FILE="${RELEASE_SHA}.tar.gz"
+              else
+                LOCAL_FILE="${RELEASE_SHA}.tar.gz.sha256"
+              fi
+
+              TEMP_FILE="$(mktemp)"
+
+              aws s3api get-object \
+                --bucket "$RELEASE_BUCKET" \
+                --key "$KEY" \
                 "$TEMP_FILE" >/dev/null
-              if ! cmp -s "$FILE" "$TEMP_FILE"; then
-                echo "ERROR: Existing artifact differs: $KEY" >&2
+
+              if ! cmp -s "$LOCAL_FILE" "$TEMP_FILE"; then
+                echo "ERROR: Existing S3 artifact differs: $KEY" >&2
                 rm -f "$TEMP_FILE"
                 exit 1
               fi
+
               rm -f "$TEMP_FILE"
               echo "Verified existing immutable artifact: $KEY"
             done
           else
-            for FILE in release.tar.gz release.tar.gz.sha256; do
-              KEY="$PREFIX/$FILE"
-              aws s3api put-object \
-                --bucket "$BUCKET" \
-                --key "$KEY" \
-                --body "$FILE" \
-                --if-none-match '*'
-              echo "Uploaded immutable artifact: $KEY"
-            done
+            aws s3api put-object \
+              --bucket "$RELEASE_BUCKET" \
+              --key "${PREFIX}/release.tar.gz" \
+              --body "${RELEASE_SHA}.tar.gz" \
+              --if-none-match '*'
+
+            aws s3api put-object \
+              --bucket "$RELEASE_BUCKET" \
+              --key "${PREFIX}/release.tar.gz.sha256" \
+              --body "${RELEASE_SHA}.tar.gz.sha256" \
+              --if-none-match '*'
+
+            echo "Uploaded immutable release artifacts: $PREFIX"
           fi
 
-      - name: Stage release and run dry-run validation
-        shell: bash
+      - name: Stage release using AWS Systems Manager
         env:
-          INSTANCE_ID: i-09f60feed6b513d99
+          RELEASE_SHA: ${{ github.sha }}
+          EC2_INSTANCE_ID: i-09f60feed6b513d99
         run: |
           set -euo pipefail
-          RELEASE_SHA="$GITHUB_SHA"
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          PARAMS=$(python3 - "$RELEASE_SHA" <<'PY'
+          PARAMS="$(python3 - "$RELEASE_SHA" <<'PY'
           import json
           import sys
 
           sha = sys.argv[1]
-          commands = [
-              "set -e",
-              f"runuser -u ec2-user -- /home/ec2-user/deploy.sh '{sha}'",
-              f"runuser -u ec2-user -- /home/ec2-user/activate-backend.sh '{sha}' --dry-run",
-          ]
-          print(json.dumps({"commands": commands}))
+          command = f"runuser -u ec2-user -- /home/ec2-user/deploy.sh '{sha}'"
+          print(json.dumps({"commands": [command]}))
           PY
-          )
+          )"
 
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name AWS-RunShellScript \
-            --parameters "$PARAMS" \
-            --comment "TML production staging and activation dry-run" \
-            --query 'Command.CommandId' \
-            --output text)
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --instance-ids "$EC2_INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --parameters "$PARAMS" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
 
-          echo "SSM command ID: $COMMAND_ID"
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID"
+            --instance-id "$EC2_INSTANCE_ID"
+
+          STATUS="$(
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query Status \
+              --output text
+          )"
+
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "ERROR: EC2 release staging failed: $STATUS"
+            exit 1
+          fi
+
+          echo "EC2 release staging completed successfully."
+
+      - name: Validate activation script without activating
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          EC2_INSTANCE_ID: i-09f60feed6b513d99
+        run: |
+          set -euo pipefail
+
+          PARAMS="$(python3 - "$RELEASE_SHA" <<'PY'
+          import json
+          import sys
+
+          sha = sys.argv[1]
+          command = (
+              "runuser -u ec2-user -- "
+              f"/home/ec2-user/activate-backend.sh '{sha}' --dry-run"
+          )
+          print(json.dumps({"commands": [command]}))
+          PY
+          )"
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --instance-ids "$EC2_INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --parameters "$PARAMS" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
+
+          STATUS="$(
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query Status \
+              --output text
+          )"
+
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "ERROR: Activation dry-run failed: $STATUS"
+            exit 1
+          fi
+
+          echo "Activation dry-run completed successfully."
+
+  activate-production:
+    name: Activate production release
+    needs:
+      - build-and-upload
+      - stage-production
+
+    # Fail closed. This variable must remain unset or false
+    # until a separately authorized production change.
+    if: ${{ github.ref == 'refs/heads/main' && vars.TML_ENABLE_PRODUCTION_ACTIVATION == 'true' }}
+
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+
+      - name: Validate activation conditions
+        env:
+          APPROVED_SHA: ${{ inputs.approved_sha }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: Invalid approved commit SHA."
+            exit 1
+          fi
+
+          if [[ "$APPROVED_SHA" != "$RELEASE_SHA" ]]; then
+            echo "ERROR: Approved SHA does not match release SHA."
+            exit 1
+          fi
+
+          if [[ "$(TZ=Asia/Taipei date +%u)" != "5" ]]; then
+            echo "ERROR: Production activation is permitted only on Friday in Taiwan."
+            exit 1
+          fi
+
+      - name: Activate approved backend release
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          EC2_INSTANCE_ID: i-09f60feed6b513d99
+        run: |
+          set -euo pipefail
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --instance-ids "$EC2_INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --parameters "commands=[\"runuser -u ec2-user -- env TML_APPROVED_DEPLOYMENT=YES /home/ec2-user/activate-backend.sh ${RELEASE_SHA}\"]" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
 
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --query '{Status:Status,StandardOutput:StandardOutputContent,StandardError:StandardErrorContent}'
+            --instance-id "$EC2_INSTANCE_ID"
 
-          STATUS=$(aws ssm get-command-invocation \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --query Status --output text)
-
-          if [[ "$STATUS" != Success ]]; then
-            echo "ERROR: Production staging failed: $STATUS" >&2
-            exit 1
-          fi
-          echo "Production staging and activation dry-run passed."
-
-  activate-production:
-    name: Activate Production Release
-    needs: stage-production
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-    steps:
-      - name: Production activation remains disabled
-        shell: bash
+      - name: Verify activated release
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          EC2_INSTANCE_ID: i-09f60feed6b513d99
         run: |
-          echo "Production approval granted."
-          echo "Staging and dry-run validation completed."
-          echo "Actual production activation is NOT enabled."
-          echo "No PM2 restart or active release switch will be performed."
+          set -euo pipefail
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --instance-ids "$EC2_INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --parameters "commands=[\"test \\\"\\$(readlink -f /home/ec2-user/tml-releases/current)\\\" = \\\"/home/ec2-user/tml-releases/releases/${RELEASE_SHA}\\\" && curl -fsS http://127.0.0.1:3000/crm/companies >/dev/null\"]" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
+
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
