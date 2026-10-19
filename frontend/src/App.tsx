@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css';
+import { validationMessages } from './utils/validationMessages';
+
 
 type Company = {
   companyId: number;
@@ -23,6 +25,9 @@ function App() {
   const [officeLocation, setOfficeLocation] = useState('');
   const [industry, setIndustry] = useState('');
   const [error, setError] = useState('');
+  // TML-35: Display error message if invalid email address is used for new contact
+  const [contactErrors, setContactErrors] = useState<string[]>([]);
+  // end TML-35
   const [editingCompanyID, setEditingCompanyID] = useState<number | null>(null);
   const [editingContactID, setEditingContactID] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -179,6 +184,10 @@ async function fetchCompanies() {
   }
 
   async function saveContact() {
+    // TML-35: Display error message if invalid email address is used for new contact
+    setContactErrors([]);
+    // end TML-35
+
     if (!selectedCompany) {
       setError('Please select a company first');
       return;
@@ -212,11 +221,39 @@ async function fetchCompanies() {
 
       // Check if the response is not ok and handle the error
       if (!response.ok) {
-        // throw new Error('Failed to save contact');
+
+        // TML-35: Display error message if invalid email address is used for new contact */
+        /*if (!response.ok) {
+          // throw new Error('Failed to save contact');
+          const errorData = await response.json();
+          console.log(errorData);
+          throw new Error(JSON.stringify(errorData));
+        }*/
+        
         const errorData = await response.json();
-        console.log(errorData);
-        throw new Error(JSON.stringify(errorData));
+        // console.log(errorData);
+        console.log('HTTP status:', response.status);
+        console.log('Backend error:', errorData);
+        console.log('Backend messages:', errorData.message);
+        console.log('Is array:', Array.isArray(errorData.message));
+        if (
+          response.status === 400 &&
+          Array.isArray(errorData.message)
+        ) {
+          const messages: string[] = errorData.message.filter((message: string) => 
+                               Object.prototype.hasOwnProperty.call(validationMessages, message)).map(
+                                (message: string) => validationMessages[message]
+                              );
+          if (messages.length > 0) {
+            setContactErrors([...new Set(messages)]);
+            return; 
+          }
+
+          throw new Error('Could not save contact.');
+        }
+        // end TML-35 
       }
+
 
       // Clear the form and reset the editing state
       setEditingContactID(null);
@@ -281,6 +318,24 @@ async function fetchCompanies() {
         </h1>
 
       <h2>Add Contact</h2>
+
+      {/* // TML-35: Display error message if invalid email address is used for new contact */}
+      {contactErrors.length > 0 && (
+        <div role="alert" style={{ color: 'red' }}>
+          <ul>
+            {contactErrors.map((message, index) => (
+              <li key={index}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* // end TML-35 */}
+
+      {/* {error && (
+        <p style={{ color: 'red' }} role="alert">
+          {error}
+        </p>
+      )}       */}
 
       <input
         type='text'
