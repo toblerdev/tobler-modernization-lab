@@ -25,9 +25,7 @@ function App() {
   const [officeLocation, setOfficeLocation] = useState('');
   const [industry, setIndustry] = useState('');
   const [error, setError] = useState('');
-  // TML-35: Display error message if invalid email address is used for new contact
   const [contactErrors, setContactErrors] = useState<string[]>([]);
-  // end TML-35
   const [editingCompanyID, setEditingCompanyID] = useState<number | null>(null);
   const [editingContactID, setEditingContactID] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,18 +34,21 @@ function App() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactRole, setContactRole] = useState('');
-  // const [contactCompanyId, setContactCompanyId] = useState<number | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-
-// Simulate network delay for testing loading state
-// function sleep(ms: number) {
-//   return new Promise(resolve => setTimeout(resolve, ms));
-// }
 
   const filteredCompanies = companies.filter(company =>
     company.companyName.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+function resetContactForm() {
+  setEditingContactID(null);
+  setContactName('');
+  setContactEmail('');
+  setContactPhone('');
+  setContactRole('');
+  setContactErrors([]);
+}
 
 async function fetchContacts(companyId?: number) {
     try {
@@ -75,9 +76,6 @@ async function fetchCompanies() {
     try {
       setError('');
       setLoading(true);
-
-      // Simulate network delay for testing loading state
-      // await sleep(1000);
 
       const response = await fetch('/crm/companies');
 
@@ -184,9 +182,7 @@ async function fetchCompanies() {
   }
 
   async function saveContact() {
-    // TML-35: Display error message if invalid email address is used for new contact
     setContactErrors([]);
-    // end TML-35
 
     if (!selectedCompany) {
       setError('Please select a company first');
@@ -222,16 +218,7 @@ async function fetchCompanies() {
       // Check if the response is not ok and handle the error
       if (!response.ok) {
 
-        // TML-35: Display error message if invalid email address is used for new contact */
-        /*if (!response.ok) {
-          // throw new Error('Failed to save contact');
-          const errorData = await response.json();
-          console.log(errorData);
-          throw new Error(JSON.stringify(errorData));
-        }*/
-        
         const errorData = await response.json();
-        // console.log(errorData);
         console.log('HTTP status:', response.status);
         console.log('Backend error:', errorData);
         console.log('Backend messages:', errorData.message);
@@ -251,16 +238,9 @@ async function fetchCompanies() {
 
           throw new Error('Could not save contact.');
         }
-        // end TML-35 
       }
 
-
-      // Clear the form and reset the editing state
-      setEditingContactID(null);
-      setContactName('');
-      setContactEmail('');
-      setContactPhone('');
-      setContactRole('');
+      resetContactForm();
 
       await fetchContacts(selectedCompany.companyId);
 
@@ -289,37 +269,30 @@ async function fetchCompanies() {
     setContactRole(contact.role || '');
   };
 
-
   useEffect(() => {
     fetchCompanies();
     // fetchContacts();
   }, []);
 
-
-
   if (selectedCompany) {
     const company = selectedCompany;
-
-    // fetchContacts(company);
-
     
     return (
-
-    // <div>
     <div style={{ padding: '2rem', fontFamily: 'Arial' }}>
-        <button onClick={() => setSelectedCompany(null)}>
+        <button onClick={() => {
+          resetContactForm();
+          setSelectedCompany(null );
+        }}
+        >
           Back to Companies
         </button>
 
-        {/*Jira: TML 34 - Name overlap. Define header with a class*/}
-        {/* <h1>Contacts for {company.companyName}</h1> */}
         <h1 className="company-title">
           Contacts for {company.companyName}
         </h1>
 
       <h2>Add Contact</h2>
 
-      {/* // TML-35: Display error message if invalid email address is used for new contact */}
       {contactErrors.length > 0 && (
         <div role="alert" style={{ color: 'red' }}>
           <ul>
@@ -329,13 +302,6 @@ async function fetchCompanies() {
           </ul>
         </div>
       )}
-      {/* // end TML-35 */}
-
-      {/* {error && (
-        <p style={{ color: 'red' }} role="alert">
-          {error}
-        </p>
-      )}       */}
 
       <input
         type='text'
@@ -370,10 +336,8 @@ async function fetchCompanies() {
         {/* Add Contact */}
       </button>
 
-        {/* Contacts table goes here */}
       <h2>Contacts</h2>
 
-      {/* <table> */}
       <table border={1} cellPadding={8}>
         <thead>
           <tr>
