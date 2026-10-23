@@ -500,7 +500,6 @@ jobs:
         always() &&
         github.ref == 'refs/heads/main' &&
         inputs.deployment_mode == 'activate' &&
-        vars.TML_ENABLE_PRODUCTION_ACTIVATION == 'true' &&
         needs.build-and-upload.result == 'skipped' &&
         needs.stage-production.result == 'skipped'
       }}
@@ -523,8 +522,14 @@ jobs:
         env:
           APPROVED_SHA: ${{ inputs.approved_sha }}
           RELEASE_SHA: ${{ inputs.approved_sha }}
+          ACTIVATION_ENABLED: ${{ vars.TML_ENABLE_PRODUCTION_ACTIVATION }}
         run: |
           set -euo pipefail
+
+          if [[ "$ACTIVATION_ENABLED" != "true" ]]; then
+            echo "ERROR: Production activation is not enabled."
+            exit 1
+          fi
 
           if [[ ! "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "ERROR: Invalid approved commit SHA."
