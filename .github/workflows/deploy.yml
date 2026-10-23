@@ -664,11 +664,26 @@ jobs:
         run: |
           set -euo pipefail
 
+          EXPECTED_PATH="/home/ec2-user/tml-releases/releases/${RELEASE_SHA}"
+
+          COMMANDS="$(
+            jq -nc \
+              --arg expected "$EXPECTED_PATH" \
+              '{
+                commands: [
+                  "set -eu",
+                  "ACTUAL_PATH=$(readlink -f /home/ec2-user/tml-releases/current)",
+                  ("test \"$ACTUAL_PATH\" = " + ($expected | @sh)),
+                  "curl -fsS --max-time 10 http://127.0.0.1:3000/crm/companies >/dev/null"
+                ]
+              }'
+          )"
+
           COMMAND_ID="$(
             aws ssm send-command \
               --instance-ids "$EC2_INSTANCE_ID" \
               --document-name AWS-RunShellScript \
-              --parameters "commands=[\"test \\\"\\$(readlink -f /home/ec2-user/tml-releases/current)\\\" = \\\"/home/ec2-user/tml-releases/releases/${RELEASE_SHA}\\\" && curl -fsS http\://127.0.0.1:3000/crm/companies >/dev/null\"]" \
+              --parameters "$COMMANDS" \
               --query 'Command.CommandId' \
               --output text
           )"
