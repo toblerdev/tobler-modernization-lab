@@ -8,6 +8,14 @@ on:
         description: "Full 40-character commit SHA approved for release"
         required: true
         type: string
+      deployment_mode:
+        description: "Stage a release or activate an existing staged release"
+        required: true
+        type: choice
+        options:
+          - stage
+          - activate
+        default: stage
 
 permissions:
   contents: read
@@ -19,7 +27,7 @@ concurrency:
 jobs:
   build-and-upload:
     name: Build and package release
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.deployment_mode == 'stage' }}
     runs-on: ubuntu-latest
 
     outputs:
@@ -192,7 +200,7 @@ jobs:
   stage-production:
     name: Stage release on EC2
     needs: build-and-upload
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.deployment_mode == 'stage' }}
     runs-on: ubuntu-latest
 
     environment: production
@@ -485,8 +493,17 @@ jobs:
       - build-and-upload
       - stage-production
 
-    # Fail closed until explicitly authorized.
-    if: ${{ github.ref == 'refs/heads/main' && vars.TML_ENABLE_PRODUCTION_ACTIVATION == 'true' }}
+    # Allow activation-only runs when staging jobs are skipped.
+    # Never activate after a failed or cancelled staging job.
+    if: >-
+      ${{
+        always() &&
+        github.ref == 'refs/heads/main' &&
+        inputs.deployment_mode == 'activate' &&
+        vars.TML_ENABLE_PRODUCTION_ACTIVATION == 'true' &&
+        needs.build-and-upload.result == 'skipped' &&
+        needs.stage-production.result == 'skipped'
+      }}
 
     runs-on: ubuntu-latest
     environment: production
@@ -505,7 +522,7 @@ jobs:
       - name: Validate activation conditions
         env:
           APPROVED_SHA: ${{ inputs.approved_sha }}
-          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ inputs.approved_sha }}
         run: |
           set -euo pipefail
 
@@ -514,8 +531,8 @@ jobs:
             exit 1
           fi
 
-          if [[ "$APPROVED_SHA" != "$RELEASE_SHA" ]]; then
-            echo "ERROR: Approved SHA does not match release SHA."
+          if [[ "$APPROVED_SHA" != "168e2aaa67175383d2f97f8866f8448994eedf3b" ]]; then
+            echo "ERROR: This activation is authorized only for the previously staged release."
             exit 1
           fi
 
@@ -524,9 +541,58 @@ jobs:
             exit 1
           fi
 
+      - name: Verify staged backend and frontend releases
+        env:
+          RELEASE_SHA: ${{ inputs.approved_sha }}
+          EC2_INSTANCE_ID: i-09f60feed6b513d99
+        run: |
+          set -euo pipefail
+
+          PARAMS="$(python3 - "$RELEASE_SHA" <<'PYCODE'
+          import json
+          import sys
+
+          sha = sys.argv[1]
+
+          command = (
+              f"test -d /home/ec2-user/tml-releases/releases/{sha} && "
+              f"test -f /home/ec2-user/tml-releases/releases/{sha}/backend/dist/main.js && "
+              f"test -d /var/www/tml-releases/releases/{sha} && "
+              f"test -f /var/www/tml-releases/releases/{sha}/index.html && "
+              f"echo 'Both staged releases verified: {sha}'"
+          )
+
+          print(json.dumps({"commands": [command]}))
+          PYCODE
+          )"
+
+          COMMAND_ID="$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID"
+
+          STATUS="$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --query Status \
+            --output text)"
+
+          [[ "$STATUS" == "Success" ]] || {
+            echo "ERROR: Staged release verification failed."
+            exit 1
+          }
+
+          echo "Backend and frontend releases are ready for activation."
+
       - name: Activate approved backend release
         env:
-          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ inputs.approved_sha }}
           EC2_INSTANCE_ID: i-09f60feed6b513d99
         run: |
           set -euo pipefail
@@ -550,7 +616,7 @@ jobs:
 
       - name: Activate approved frontend release
         env:
-          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ inputs.approved_sha }}
           EC2_INSTANCE_ID: i-09f60feed6b513d99
         run: |
           set -euo pipefail
@@ -588,7 +654,7 @@ jobs:
 
       - name: Verify activated release
         env:
-          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ inputs.approved_sha }}
           EC2_INSTANCE_ID: i-09f60feed6b513d99
         run: |
           set -euo pipefail
