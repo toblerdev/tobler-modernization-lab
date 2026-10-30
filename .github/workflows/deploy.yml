@@ -537,7 +537,7 @@ jobs:
             exit 1
           fi
 
-          if [[ "$APPROVED_SHA" != "168e2aaa67175383d2f97f8866f8448994eedf3b" ]]; then
+          if [[ "$APPROVED_SHA" != "a2f54588484ba772aa9ca8be286116c9484f39c6" ]]; then
             echo "ERROR: This activation is authorized only for the previously staged release."
             exit 1
           fi
