@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CrmModule } from './crm/crm.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
 
 @Module({
   imports: [
@@ -27,6 +28,8 @@ import { CrmModule } from './crm/crm.module';
     }),
 
     CrmModule,
+
+    RecommendationsModule,
   ],
 
   controllers: [AppController],
