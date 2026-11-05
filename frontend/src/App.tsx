@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css';
 import { validationMessages } from './utils/validationMessages';
-
+import RecommendationsDashboard from './components/RecommendationsDashboard';
 
 type Company = {
   companyId: number;
@@ -36,6 +36,7 @@ function App() {
   const [contactRole, setContactRole] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [currentPage, setCurrentPage] = useState<'crm' | 'recommendations'>('crm');
 
   const filteredCompanies = companies.filter(company =>
     company.companyName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -274,6 +275,19 @@ async function fetchCompanies() {
     // fetchContacts();
   }, []);
 
+  if (currentPage === 'recommendations') {
+    return (
+      <div style={{ padding: '2rem', fontFamily: 'Arial' }}>
+        <button onClick={() => setCurrentPage('crm')}>
+          Back to CRM
+        </button>
+
+        <RecommendationsDashboard />
+      </div>
+    )
+  }
+
+
   if (selectedCompany) {
     const company = selectedCompany;
     
@@ -379,7 +393,11 @@ async function fetchCompanies() {
 
     <div style={{ padding: '2rem', fontFamily: 'Arial' }}>
       <h1>CRM Companies</h1>
-
+        <button
+          onClick={() => setCurrentPage('recommendations')}
+        >
+          View Outreach Recommendations
+        </button>
         {error && <p style={{ color: 'red' }}>{error}</p>}
 
       <div style={{ marginBottom: '1rem' }}>
