@@ -9,6 +9,7 @@ import { Company } from '../crm/entities/company.entity';
 import { OutreachEvent } from './entities/outreach-event.entity';
 import { RecommendationRule } from './entities/recommendation-rule.entity';
 import { CampaignRuleOverride } from './entities/campaign-rule-override.entity';
+import { Campaign } from './entities/campaign.entity';
 
 describe('RecommendationsService', () => {
   let service: RecommendationsService;
@@ -37,6 +38,10 @@ const campaignRuleOverrideRepository = {
   find: jest.fn(),
 };
 
+const campaignRepository = {
+  find: jest.fn(),
+};
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -49,6 +54,7 @@ const campaignRuleOverrideRepository = {
         { provide: getRepositoryToken(OutreachEvent), useValue: outreachEventRepository },
         { provide: getRepositoryToken(RecommendationRule), useValue: recommendationRuleRepository, },
         { provide: getRepositoryToken(CampaignRuleOverride), useValue: campaignRuleOverrideRepository, },
+        { provide: getRepositoryToken(Campaign), useValue: campaignRepository, },
       ],
     }).compile();
 
@@ -468,6 +474,55 @@ const campaignRuleOverrideRepository = {
       rules,
       companies,
     });
+  });
+
+  it('should use the latest follow-up date for each company', async () => {
+    const companies = [
+      {
+        companyId: 101,
+        companyName: 'ABC Manufacturing',
+        industry: 'Machine Tools / CNC',
+        contacts: [],
+      },
+      {
+        companyId: 102,
+        companyName: 'XYZ Manufacturing',
+        industry: 'Machine Tools / CNC',
+        contacts: [],
+      },
+    ];
+
+    const outreachEvents = [
+      {
+        companyId: 101,
+        followUpDate: '2026-11-05',
+      },
+      {
+        companyId: 101,
+        followUpDate: '2026-11-12',
+      },
+      {
+        companyId: 101,
+        followUpDate: null,
+      },
+      {
+        companyId: 102,
+        followUpDate: null,
+      },
+    ];
+
+    companyRepository.find.mockResolvedValue(companies);
+    outreachEventRepository.find.mockResolvedValue(outreachEvents);
+
+    const result = await service.getCompaniesForScoring();
+
+    expect(result).toHaveLength(2);
+
+    expect(result[0].nextFollowUpDate).toBe('2026-11-12');
+    expect(result[0].hasOutreachHistory).toBe(true);
+
+    expect(result[1].nextFollowUpDate).toBeNull();
+    expect(result[1].hasOutreachHistory).toBe(true);
   });
 
 });

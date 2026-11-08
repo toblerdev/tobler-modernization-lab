@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './RecommendationsDashboard.css';
 
 type RankedCompany = {
@@ -8,40 +8,121 @@ type RankedCompany = {
     reasons: string[];
 };
 
-const sampleRecommendations: RankedCompany[] = [
-    {
-        companyId: 101,
-        companyName: 'Acme Technologies',
-        score: 85,
-        reasons: ['Target market match', 'Contact available', 'Follow-up overdue'],
-    },
-    {
-        companyId: 102,
-        companyName: 'Global Systems',
-        score: 60,
-        reasons: ['Target market match', 'Never contacted'],
-    },
-    {
-        companyId: 103,
-        companyName: 'Northstar Solutions',
-        score: 40,
-        reasons: ['Contact available', 'Follow-up due today'],
-    },
-];
+type Campaign = {
+    campaignId: number;
+    campaignName: string;
+    targetMarket: string | null;
+}
 
 function RecommendationsDashboard() {
 
     const [selectedCampaignId, setSelectedCampaignId] = useState<number>(1);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const selectedCampaign = campaigns.find(campaign => campaign.campaignId === selectedCampaignId);
+    useEffect(() => {
+        const controller = new AbortController();
 
+        async function loadCampaigns() {
+            try {
+                const response = await fetch('/recommendations/campaigns', {
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load campaigns: ${response.status}`);
+                }
+
+                const data: Campaign[] = await response.json();
+                if (!controller.signal.aborted) {
+                setCampaigns(data);
+                }
+
+            } catch (error) {
+                if (!controller.signal.aborted) {
+                    console.error('Error loading campaigns:', error);
+                }
+            }
+        }
+
+        void loadCampaigns();
+
+        return () => controller.abort();
+    }, []);
+
+    const [recommendations, setRecommendations] = useState<RankedCompany[]>([]);
     const [sortOrder, setSortOrder] = useState<'highest' | 'lowest'>('highest');
-
-    const sortedRecommendations = [...sampleRecommendations].sort(
+    const sortedRecommendations = [...recommendations].sort(
     (a, b) =>
         sortOrder === 'highest'
         ? b.score - a.score
         : a.score - b.score
     );
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
+    useEffect(() => {
+        if (!selectedCampaign?.targetMarket) {
+            setRecommendations([]);
+            setError(null);
+            setIsLoading(false);
+            return;
+        }
+
+        const targetMarket = selectedCampaign.targetMarket;
+    
+        const controller = new AbortController();
+
+        async function loadRecommendations() {
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                const response = await fetch(
+                    '/recommendations/companies/generate',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            campaignId: selectedCampaignId,
+                            targetMarket,
+                            evaluationDate: new Date()
+                                .toLocaleDateString('en-CA'),
+                        }),
+                        signal: controller.signal,
+                    },
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        `HTTP error: ${response.status}`,
+                    );
+                }
+
+                const data: {
+                    campaignId: number;
+                    recommendations: RankedCompany[];
+                } = await response.json();
+
+                setRecommendations(data.recommendations);
+            } catch (error) {
+                if (!controller.signal.aborted) {
+                    console.error('Failed to load recommendations:', error);
+                    setError('Failed to load recommendations. Please try again later.');
+                    setRecommendations([]);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        void loadRecommendations();
+
+        return () => controller.abort();
+    }, [selectedCampaign]);
     return (
         <section className="recommendations-dashboard">
             <h1>Outreach Recommendations</h1>
@@ -57,8 +138,11 @@ function RecommendationsDashboard() {
                     setSelectedCampaignId(Number(event.target.value))
                     }
                 >
-                    <option value={1}>Campaign 1 — US Technology</option>
-                    <option value={2}>Campaign 2 — General Outreach</option>
+                    {campaigns.map((campaign) => (
+                        <option key={campaign.campaignId} value={campaign.campaignId}>
+                            {campaign.campaignName}
+                        </option>
+                    ))}
                 </select>
             </div>
 
@@ -77,8 +161,16 @@ function RecommendationsDashboard() {
                 </select>
             </div>
 
+            {isLoading && (
+                <p role="status">Loading recommendations...</p>
+            )}
+            {error && (
+                <p role="alert" className="recommedations-error">
+                    {error}
+                </p>
+            )}
 
-            {sortedRecommendations.map((company) => (
+            {!isLoading && !error && sortedRecommendations.map((company) => (
                 <article key={company.companyId}
                 className="recommendation-card"
                 >

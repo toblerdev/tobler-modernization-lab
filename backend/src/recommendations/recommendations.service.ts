@@ -12,7 +12,7 @@ import { RecommendationRule } from './entities/recommendation-rule.entity';
 import { CampaignRuleOverride } from './entities/campaign-rule-override.entity';
 import { BadGatewayException, ServiceUnavailableException, } from '@nestjs/common';
 import { AxiosError } from 'axios';
-
+import { Campaign } from './entities/campaign.entity';
 
 @Injectable()
 export class RecommendationsService {
@@ -31,8 +31,23 @@ export class RecommendationsService {
 
     @InjectRepository(CampaignRuleOverride)
     private readonly campaignRuleOverrideRepository: Repository<CampaignRuleOverride>,
+
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
+  async getCampaigns(): Promise<Campaign[]> {
+      return this.campaignRepository.find({
+          select: {
+              campaignId: true,
+              campaignName: true,
+              targetMarket: true,
+          },
+          order: {
+              campaignId: 'ASC',
+          },
+      });
+  }
 
   async rankCompanies(request: {
     campaignId: number;
@@ -104,12 +119,29 @@ export class RecommendationsService {
       outreachEvents.map((event) => event.companyId),
     );
 
+    const followUpDatesByCompany = new Map<number, string>();
+
+    for (const event of outreachEvents) {
+      if (!event.followUpDate) {
+        continue;
+      }
+
+      const existingDate = followUpDatesByCompany.get(event.companyId);
+
+      if (!existingDate || event.followUpDate > existingDate) {
+        followUpDatesByCompany.set(event.companyId, event.followUpDate);
+      }
+    }    
+
     // Map each company to the Spring Boot scoring format
     return companies.map((company) => {
       const scoringInput = this.mapCompanyToScoringInput(company);
 
       scoringInput.hasOutreachHistory =
         contactedCompanyIds.has(company.companyId);
+
+      scoringInput.nextFollowUpDate =
+        followUpDatesByCompany.get(company.companyId) ?? null;
 
       return scoringInput;
     });
