@@ -2,6 +2,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   UsePipes,
   ValidationPipe,
@@ -16,6 +17,11 @@ export class RecommendationsController {
   constructor(
     private readonly recommendationsService: RecommendationsService,
   ) {}
+
+  @Get('campaigns')
+  async getCampaigns() {
+    return this.recommendationsService.getCampaigns();
+  }
 
   @Post('companies')
   @UsePipes(

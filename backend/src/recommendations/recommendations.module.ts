@@ -9,6 +9,7 @@ import { RecommendationsController } from './recommendations.controller';
 import { OutreachEvent } from './entities/outreach-event.entity';
 import { RecommendationRule } from './entities/recommendation-rule.entity';
 import { CampaignRuleOverride } from './entities/campaign-rule-override.entity';
+import { Campaign } from './entities/campaign.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CampaignRuleOverride } from './entities/campaign-rule-override.entity';
       OutreachEvent,
       RecommendationRule,
       CampaignRuleOverride,
+      Campaign,
     ]),
   ],
   providers: [RecommendationsService],
