@@ -1,0 +1,94 @@
+import { useState } from 'react';
+
+type OutreachAiAssistantProps = {
+    companyName: string;
+    targetMarket: string;
+};
+
+function OutreachAiAssistant({
+    companyName,
+    targetMarket,
+}: OutreachAiAssistantProps) {
+
+    const [draft, setDraft] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    async function generateDraft() {
+        setIsGenerating(true);
+        setError(null);
+        setDraft('');
+
+        try {
+            const response = await fetch(
+                '/recommendations/ai/outreach-draft',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        companyName,
+                        targetMarket,
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data: { draft: string } = await response.json();
+            setDraft(data.draft);
+
+        } catch (error) {
+            console.error('AI draft generation failed:', error);
+            setError('Unable to generate an email. Please try again.');
+
+        } finally {
+            setIsGenerating(false);
+        }
+    }
+
+    return (
+        <div className="ai-assistant-panel">
+            <h2>AI Outreach Assistant</h2>
+
+            <p>
+                Selected company: <strong>{companyName}</strong>
+            </p>
+
+            <button
+                type="button"
+                onClick={() => void generateDraft()}
+                disabled={isGenerating}
+            >
+                {isGenerating ? 'Generating...' : 'Generate AI Email'}
+            </button>
+
+            {error && <p role="alert">{error}</p>}
+
+            {draft && (
+                <>
+                    <h3>Generated Email</h3>
+
+                    <textarea
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        rows={12}
+                        aria-label="AI-generated outreach email"
+                    />
+
+                    <button
+                        type="button"
+                        onClick={() => void navigator.clipboard.writeText(draft)}
+                    >
+                        Copy Email
+                    </button>
+                </>
+            )}
+        </div>
+    );
+}
+
+export default OutreachAiAssistant;

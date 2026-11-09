@@ -13,6 +13,7 @@ import { CampaignRuleOverride } from './entities/campaign-rule-override.entity';
 import { BadGatewayException, ServiceUnavailableException, } from '@nestjs/common';
 import { AxiosError } from 'axios';
 import { Campaign } from './entities/campaign.entity';
+import { GenerateOutreachDraftDto } from './dto/generate-outreach-draft.dto';
 
 @Injectable()
 export class RecommendationsService {
@@ -85,6 +86,42 @@ export class RecommendationsService {
     }
   }
 
+  async generateOutreachDraft(
+    request: GenerateOutreachDraftDto,
+  ): Promise<{ draft: string }> {
+
+    const springBootUrl = this.configService.get<string>(
+      'SPRING_BOOT_URL',
+      'http://localhost:8080',
+    );
+
+    const url = `${springBootUrl}/ai/outreach-draft`;
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<{ draft: string }>(
+          url,
+          request,
+          { timeout: 30000 },
+        ),
+      );
+
+      return response.data;
+
+    } catch (error: unknown) {
+
+      if (error instanceof AxiosError && !error.response) {
+        throw new ServiceUnavailableException(
+          'AI outreach service is unavailable',
+        );
+      }
+
+      throw new BadGatewayException(
+        'AI outreach generation failed',
+      );
+    }
+  }
+
   mapCompanyToScoringInput(company: {
     companyId: number;
     companyName: string;
@@ -131,7 +168,7 @@ export class RecommendationsService {
       if (!existingDate || event.followUpDate > existingDate) {
         followUpDatesByCompany.set(event.companyId, event.followUpDate);
       }
-    }    
+    }
 
     // Map each company to the Spring Boot scoring format
     return companies.map((company) => {

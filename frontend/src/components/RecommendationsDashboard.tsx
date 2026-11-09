@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import './RecommendationsDashboard.css';
+import OutreachAiAssistant from './OutreachAiAssistant';
 
 type RankedCompany = {
     companyId: number;
@@ -17,6 +18,8 @@ type Campaign = {
 function RecommendationsDashboard() {
 
     const [selectedCampaignId, setSelectedCampaignId] = useState<number>(1);
+    const [selectedCompany, setSelectedCompany] =
+    useState<RankedCompany | null>(null);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const selectedCampaign = campaigns.find(campaign => campaign.campaignId === selectedCampaignId);
     useEffect(() => {
@@ -134,9 +137,10 @@ function RecommendationsDashboard() {
                 <select
                     id="campaign-select"
                     value={selectedCampaignId}
-                    onChange={(event) =>
-                    setSelectedCampaignId(Number(event.target.value))
-                    }
+                    onChange={(event) => {
+                        setSelectedCampaignId(Number(event.target.value));
+                        setSelectedCompany(null);
+                    }}
                 >
                     {campaigns.map((campaign) => (
                         <option key={campaign.campaignId} value={campaign.campaignId}>
@@ -176,6 +180,12 @@ function RecommendationsDashboard() {
                 >
 
                     <h2>{company.companyName}</h2>
+                    <button
+                        type="button"
+                        onClick={() => setSelectedCompany(company)}
+                    >
+                        Draft AI Email
+                    </button>
 
                     <p className="recommendation-score">
                     <strong>Recommendation Score: {company.score}</strong>
@@ -211,17 +221,21 @@ function RecommendationsDashboard() {
                 </article>
             ))}
 
+        {selectedCompany && selectedCampaign?.targetMarket ? (
+            <OutreachAiAssistant
+                key={`${selectedCampaignId}-${selectedCompany.companyId}`}
+                companyName={selectedCompany.companyName}
+                targetMarket={selectedCampaign.targetMarket}
+            />
+        ) : (
             <div className="ai-assistant-panel">
                 <h2>AI Outreach Assistant</h2>
                 <p>
-                    AI-powered recommendation explanations and
-                    personalized outreach email drafting will be
-                    available in a future release.
+                    Select a company above to generate a professional
+                    English consulting outreach email.
                 </p>
-                <span className="ai-assistant-status">
-                    Coming Soon — TML-48
-                </span>
             </div>
+        )}
         </section>
     );
 }
