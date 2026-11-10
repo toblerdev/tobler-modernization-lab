@@ -11,6 +11,7 @@ import {
 import { RecommendationsService } from './recommendations.service';
 import { CompanyRecommendationRequestDto } from './dto/company-recommendation-request.dto';
 import { GenerateRecommendationsDto } from './dto/generate-recommendations.dto';
+import { GenerateOutreachDraftDto } from './dto/generate-outreach-draft.dto';
 
 @Controller('recommendations')
 export class RecommendationsController {
@@ -56,6 +57,20 @@ export class RecommendationsController {
       );
 
     return this.recommendationsService.rankCompanies(scoringRequest);
+  }
+
+  @Post('ai/outreach-draft')
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  )
+  async generateOutreachDraft(
+    @Body() request: GenerateOutreachDraftDto,
+  ) {
+    return this.recommendationsService.generateOutreachDraft(request);
   }
 
 }

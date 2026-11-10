@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import com.toblermodernizationlab.outreach.service.OutreachAiService;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.toblermodernizationlab.outreach.service.RecommendationService;
 
@@ -19,6 +21,9 @@ class RecommendationControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private OutreachAiService outreachAiService;
 
     @Test
     void shouldAcceptCompanyRecommendationRequest() throws Exception {
