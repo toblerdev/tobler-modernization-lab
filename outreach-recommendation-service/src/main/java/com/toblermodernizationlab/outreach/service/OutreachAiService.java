@@ -17,7 +17,13 @@ public class OutreachAiService {
             String targetMarket) {
 
         String prompt = """
-            Write a professional introductory outreach email.
+            Write the email in two languages:
+            1. Traditional Chinese (Taiwan Mandarin), presented first.
+            2. English, presented immediately afterward.
+
+            Both versions must communicate the same message and offer.
+            Use natural, professional Taiwanese business language in the
+            Traditional Chinese version.
 
             Company: %s
             Target market: %s
@@ -27,6 +33,14 @@ public class OutreachAiService {
             who want their staff to improve their English communication skills
             at tradeshows, in cross-cultural meetings, and in other professional settings
             where English is the primary language.
+            Tobler Professional English Consulting offers a complimentary
+            30-minute demonstration session to show how its training can
+            help employees improve English communication in professional
+            and technical settings.
+
+            Include a polite invitation to schedule this demonstration.
+            Do not invent client-specific facts, previous relationships,
+            testimonials, or guaranteed results.
 
             Requirements:
             - Professional and friendly tone
