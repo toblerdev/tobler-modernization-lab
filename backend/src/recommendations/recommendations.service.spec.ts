@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { of } from 'rxjs';
-import { AxiosResponse } from 'axios';
+import { AxiosError, AxiosResponse } from 'axios';
 import { RecommendationsService } from './recommendations.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Company } from '../crm/entities/company.entity';
@@ -10,6 +10,12 @@ import { OutreachEvent } from './entities/outreach-event.entity';
 import { RecommendationRule } from './entities/recommendation-rule.entity';
 import { CampaignRuleOverride } from './entities/campaign-rule-override.entity';
 import { Campaign } from './entities/campaign.entity';
+import { throwError } from 'rxjs';
+import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 
 describe('RecommendationsService', () => {
   let service: RecommendationsService;
@@ -91,6 +97,79 @@ const campaignRepository = {
     expect(result).toEqual(response);
   });
 
+  it('should generate an AI outreach email through Spring Boot', async () => {
+    const request = {
+      companyName: 'Giant Manufacturing',
+      targetMarket: 'Bicycle and E-Bike Manufacturing',
+    };
+
+    const response = {
+      draft: 'Subject: Professional English Training\n\nDear Giant Manufacturing Team...',
+    };
+
+    mockHttpService.post.mockReturnValue(
+      of({ data: response } as AxiosResponse),
+    );
+
+    const result = await service.generateOutreachDraft(request);
+
+    expect(mockHttpService.post).toHaveBeenCalledWith(
+      'http://localhost:8080/ai/outreach-draft',
+      request,
+      { timeout: 30000 },
+    );
+
+    expect(result).toEqual(response);
+  });
+
+  it('should return 503 when Spring Boot is unavailable', async () => {
+    const request = {
+      companyName: 'Giant Manufacturing',
+      targetMarket: 'Bicycle and E-Bike Manufacturing',
+    };
+
+    const connectionError = new AxiosError(
+      'connect ECONNREFUSED 127.0.0.1:8080',
+      'ECONNREFUSED',
+    );
+
+    mockHttpService.post.mockReturnValue(
+      throwError(() => connectionError),
+    );
+
+    await expect(
+      service.generateOutreachDraft(request),
+    ).rejects.toThrow(ServiceUnavailableException);
+  });
+
+  it('should return 502 when Spring Boot returns an error', async () => {
+    const request = {
+      companyName: 'Giant Manufacturing',
+      targetMarket: 'Bicycle and E-Bike Manufacturing',
+    };
+
+    const upstreamError = new AxiosError(
+      'Internal Server Error',
+      'ERR_BAD_RESPONSE',
+      undefined,
+      undefined,
+      {
+        data: { message: 'AI generation failed' },
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: {},
+        config: { headers: {} as any },
+      },
+    );
+
+    mockHttpService.post.mockReturnValue(
+      throwError(() => upstreamError),
+    );
+
+    await expect(
+      service.generateOutreachDraft(request),
+    ).rejects.toThrow(BadGatewayException);
+  });
 
   it('should map a company entity to a scoring input', () => {
     const company = {

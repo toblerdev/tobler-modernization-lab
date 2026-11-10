@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type OutreachAiAssistantProps = {
     companyName: string;
@@ -13,8 +13,20 @@ function OutreachAiAssistant({
     const [draft, setDraft] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        return () => {
+            abortControllerRef.current?.abort();
+        };
+    }, [companyName, targetMarket]);
 
     async function generateDraft() {
+        abortControllerRef.current?.abort();
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         setIsGenerating(true);
         setError(null);
         setDraft('');
@@ -31,6 +43,7 @@ function OutreachAiAssistant({
                         companyName,
                         targetMarket,
                     }),
+                    signal: controller.signal,
                 }
             );
 
@@ -39,14 +52,23 @@ function OutreachAiAssistant({
             }
 
             const data: { draft: string } = await response.json();
-            setDraft(data.draft);
 
+            if (!controller.signal.aborted) {
+                setDraft(data.draft);
+            }
         } catch (error) {
-            console.error('AI draft generation failed:', error);
-            setError('Unable to generate an email. Please try again.');
-
+            if (!controller.signal.aborted) {
+                console.error('AI draft generation failed:', error);
+                setError('Unable to generate an email. Please try again.');
+            }
         } finally {
-            setIsGenerating(false);
+            if (abortControllerRef.current === controller) {
+                abortControllerRef.current = null;
+
+                if (!controller.signal.aborted) {
+                    setIsGenerating(false);
+                }
+            }
         }
     }
 
