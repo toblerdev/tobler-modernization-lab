@@ -14,6 +14,7 @@ function OutreachAiAssistant({
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
     useEffect(() => {
         return () => {
@@ -27,9 +28,11 @@ function OutreachAiAssistant({
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
+
         setIsGenerating(true);
         setError(null);
         setDraft('');
+        setCopyStatus(null);
 
         try {
             const response = await fetch(
@@ -72,6 +75,18 @@ function OutreachAiAssistant({
         }
     }
 
+    async function copyEmail() {
+        setCopyStatus(null);
+
+        try {
+            await navigator.clipboard.writeText(draft);
+            setCopyStatus('Email copied to clipboard!');
+        } catch (error) {
+            console.error('Failed to copy email:', error);
+            setCopyStatus('Unable to copy email. Please try again.');
+        }
+    }
+
     return (
         <div className="ai-assistant-panel">
             <h2>AI Outreach Assistant</h2>
@@ -103,10 +118,16 @@ function OutreachAiAssistant({
 
                     <button
                         type="button"
-                        onClick={() => void navigator.clipboard.writeText(draft)}
+                        onClick={() => void copyEmail()}
                     >
                         Copy Email
                     </button>
+
+                    {copyStatus && (
+                        <p role="status" className="ai-copy-status">
+                            {copyStatus}
+                        </p>
+                    )}
                 </>
             )}
         </div>

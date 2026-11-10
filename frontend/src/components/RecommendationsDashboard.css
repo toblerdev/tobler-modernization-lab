@@ -138,3 +138,162 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* TML-55: Two-column recommendations workspace */
+
+.recommendations-dashboard {
+    max-width: 1400px;
+}
+
+.recommendations-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.recommendations-list,
+.recommendations-assistant {
+    min-width: 0;
+}
+
+.recommendations-list {
+    max-height: 75vh;
+    overflow-y: auto;
+}
+
+.recommendations-assistant {
+    position: sticky;
+    top: 24px;
+}
+
+.recommendations-assistant .ai-assistant-panel {
+    margin-top: 0;
+}
+
+@media (max-width: 900px) {
+    .recommendations-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .recommendations-list {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .recommendations-assistant {
+        position: static;
+    }
+}
+
+/* TML-55: AI Outreach Assistant improvements */
+
+.recommendations-assistant .ai-assistant-panel {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ai-assistant-panel textarea {
+    display: block;
+    width: 100%;
+    min-height: 350px;
+    box-sizing: border-box;
+
+    padding: 16px;
+    margin: 16px 0;
+
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+
+    color: var(--text-h);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+
+    resize: vertical;
+}
+
+.ai-assistant-panel textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.ai-assistant-panel button {
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.ai-assistant-panel button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* TML-55: Compact recommendation cards */
+
+.recommendation-card {
+    padding: 16px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s ease;
+}
+
+.recommendation-card-selected {
+    border: 2px solid var(--accent);
+    background: var(--accent-bg);
+}
+
+.recommendation-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.recommendation-card-header h2 {
+    font-size: 16px;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.recommendation-card-header button {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.recommendation-score {
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.recommendation-score-bar {
+    height: 7px;
+    margin-bottom: 10px;
+}
+
+.recommendation-reasons {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.recommendation-reasons li {
+    margin-bottom: 3px;
+}
+
+@media (max-width: 600px) {
+    .recommendation-card-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+}
+
+/* TML-55: AI copy confirmation */
+
+.ai-copy-status {
+    margin-top: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-h);
+}
