@@ -1,0 +1,12 @@
+
+[Unit]
+Description=Daily TML Demo Database Reset at 08:00 UTC
+
+[Timer]
+OnCalendar=*-*-* 08:00:00 UTC
+Persistent=true
+Unit=tml-demo-reset.service
+
+[Install]
+WantedBy=timers.target
+
