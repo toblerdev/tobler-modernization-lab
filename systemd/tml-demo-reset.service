@@ -1,0 +1,14 @@
+
+[Unit]
+Description=TML Demo Database Restoration
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+Environment=ALLOW_LIVE_RESET=YES
+ExecStart=/opt/tml/scripts/restore-demo-data.sh modernization_lab
+TimeoutStartSec=120
+StandardOutput=journal
+StandardError=journal
