@@ -114,10 +114,22 @@ jobs:
 
           cp -a frontend/dist release-package/frontend/
 
-          tar -czf "${RELEASE_SHA}.tar.gz" \
+          # Normalize archive metadata for reproducible packaging.
+          # SOURCE_DATE_EPOCH is the timestamp of the approved commit.
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$RELEASE_SHA")"
+
+          tar \
+            --sort=name \
+            --mtime="@${SOURCE_DATE_EPOCH}" \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            --mode='u+rwX,go+rX' \
             --exclude='*/node_modules/.bin' \
             --exclude='*/node_modules/.bin/*' \
-            -C release-package .
+            -C release-package \
+            -cf - . \
+            | gzip -n > "${RELEASE_SHA}.tar.gz"
 
           # EC2 expects the checksum filename to be release.tar.gz.
           cp "${RELEASE_SHA}.tar.gz" release.tar.gz
@@ -524,6 +536,7 @@ jobs:
           APPROVED_SHA: ${{ inputs.approved_sha }}
           RELEASE_SHA: ${{ inputs.approved_sha }}
           ACTIVATION_ENABLED: ${{ vars.TML_ENABLE_PRODUCTION_ACTIVATION }}
+          AUTHORIZED_RELEASE_SHA: ${{ vars.TML_APPROVED_RELEASE_SHA }}
         run: |
           set -euo pipefail
 
@@ -537,8 +550,13 @@ jobs:
             exit 1
           fi
 
-          if [[ "$APPROVED_SHA" != "a2f54588484ba772aa9ca8be286116c9484f39c6" ]]; then
-            echo "ERROR: This activation is authorized only for the previously staged release."
+          if [[ ! "$AUTHORIZED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: No valid production release SHA has been authorized."
+            exit 1
+          fi
+
+          if [[ "$APPROVED_SHA" != "$AUTHORIZED_RELEASE_SHA" ]]; then
+            echo "ERROR: Requested release does not match the authorized production SHA."
             exit 1
           fi
 
